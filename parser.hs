@@ -1,7 +1,8 @@
 module Parser where
 
 import Data.Function
-
+import Data.Functor
+import Data.List
 
 class SvnFlag a where
     parseFlag :: Char -> a
@@ -57,25 +58,88 @@ instance SvnFlag DummyFlag where
     parseFlag _ = DummyFlag
 
 
-data SvnFile = SvnFile ModificationStatus PropStatus DummyFlag DummyFlag DummyFlag DummyFlag DummyFlag DummyFlag FilePath
+data SvnFile = SvnFile ModificationStatus PropStatus FilePath
     deriving (Show)
+
+
+getPath :: SvnFile -> FilePath
+getPath (SvnFile _ _ path) = path
+
+
+getModificationStatus :: SvnFile -> ModificationStatus
+getModificationStatus (SvnFile ms _ _) = ms
 
 
 data ParsingState c = ParsingState String c
 
 parseOneFlag (ParsingState (c:chrs) ctor) = ParsingState chrs (ctor $ parseFlag c)
+
 parsePath (ParsingState str ctor) = ctor str
+
+skipChar n (ParsingState str ctor) = ParsingState (drop n str) ctor
+
 
 parseSvnStatusLine :: String -> SvnFile
 parseSvnStatusLine str = (parseOneFlag (ParsingState str SvnFile))
     & parseOneFlag
-    & parseOneFlag
-    & parseOneFlag
-    & parseOneFlag
-    & parseOneFlag
-    & parseOneFlag
-    & parseOneFlag
+    & skipChar 6
     & parsePath
 
+
+isModified :: SvnFile -> Bool
+isModified = (MsModified ==) . getModificationStatus
+
+isUntracked :: SvnFile -> Bool
+isUntracked = (MsUntracked ==) . getModificationStatus
+
+tab :: Int -> String
+tab = flip replicate ' '
+
+class ChangesModel a where
+    build :: [SvnFile] -> a
+    toString :: a -> String
+
+data NoChangelistModel = NoChangelistModel [SvnFile]
+
+data TextStyle = Escape | Red | Green | Blue | Reset | BoldBlack deriving (Show)
+
+getString :: TextStyle -> String
+getString Escape = "\x1b["
+getString Red = "0;31m"
+getString Green = "0;32m"
+getString Blue = "0;34m"
+getString BoldBlack = "1;30m"
+getString Reset = "0m"
+
+
+withStyle :: TextStyle -> String -> String
+withStyle style text = (getString Escape) <> (getString style) <> text <> (getString Escape) <> (getString Reset)
+
+
+
+
+
+instance ChangesModel NoChangelistModel where
+    build files = NoChangelistModel files
+
+    toString (NoChangelistModel files) = (showFiles (isModified) (withStyle Blue) "Modified files:" files) ++
+        "\n" ++
+        (showFiles (isUntracked) (withStyle Red) (withStyle BoldBlack "Untracked files:") files)
+        where
+            showFiles :: (SvnFile -> Bool) -> (String -> String) -> String -> [SvnFile] -> String
+            showFiles predicate styler header files = let
+                    filesToShow = filter predicate files
+                    fileNames = map getPath filesToShow
+                    coloredFileNames = map styler fileNames
+                    fileRows = map (\x -> (tab 4) ++ x ++ "\n") coloredFileNames
+                in
+                    if null fileRows then "" else header <> "\n" <> concat fileRows
+
+
+toFiles :: String -> [SvnFile]
+toFiles = lines <&> (fmap parseSvnStatusLine)
+
+readModel :: ChangesModel a => String -> a
+readModel str = build $ toFiles str
 
 
