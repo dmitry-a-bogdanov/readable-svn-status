@@ -58,17 +58,12 @@ instance SvnFlag DummyFlag where
     parseFlag _ = DummyFlag
 
 
-data SvnFile = SvnFile ModificationStatus PropStatus FilePath
+data SvnFile = SvnFile
+    { getModificationStatus :: ModificationStatus
+    , getPropStatus :: PropStatus
+    , getPath :: FilePath
+    }
     deriving (Show)
-
-
-getPath :: SvnFile -> FilePath
-getPath (SvnFile _ _ path) = path
-
-
-getModificationStatus :: SvnFile -> ModificationStatus
-getModificationStatus (SvnFile ms _ _) = ms
-
 
 data ParsingState c = ParsingState String c
 
