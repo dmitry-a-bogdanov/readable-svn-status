@@ -94,7 +94,10 @@ class ChangesModel a where
     build :: [SvnFile] -> a
     toString :: a -> String
 
-data NoChangelistModel = NoChangelistModel [SvnFile]
+data NoChangelistModel = NoChangelistModel
+    { modifiedFiles :: [SvnFile]
+    , untrackedFiles :: [SvnFile]
+    }
 
 data TextStyle = Escape | Red | Green | Blue | Reset | BoldBlack deriving (Show)
 
@@ -111,20 +114,18 @@ withStyle :: TextStyle -> String -> String
 withStyle style text = (getString Escape) <> (getString style) <> text <> (getString Escape) <> (getString Reset)
 
 
-
-
-
 instance ChangesModel NoChangelistModel where
-    build files = NoChangelistModel files
+    build files = NoChangelistModel
+        (filter isModified files)
+        (filter isUntracked files)
 
-    toString (NoChangelistModel files) = (showFiles (isModified) (withStyle Blue) "Modified files:" files) ++
+    toString model = (showFiles (withStyle Blue) "Modified files:" (modifiedFiles model)) ++
         "\n" ++
-        (showFiles (isUntracked) (withStyle Red) (withStyle BoldBlack "Untracked files:") files)
+        (showFiles (withStyle Red) (withStyle BoldBlack "Untracked files:") (untrackedFiles model))
         where
-            showFiles :: (SvnFile -> Bool) -> (String -> String) -> String -> [SvnFile] -> String
-            showFiles predicate styler header files = let
-                    filesToShow = filter predicate files
-                    fileNames = map getPath filesToShow
+            showFiles :: (String -> String) -> String -> [SvnFile] -> String
+            showFiles styler header files = let
+                    fileNames = map getPath files
                     coloredFileNames = map styler fileNames
                     fileRows = map (\x -> (tab 4) ++ x ++ "\n") coloredFileNames
                 in
