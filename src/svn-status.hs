@@ -9,5 +9,5 @@ main :: IO ()
 main = do
     (_, Just outStream, Just errStream, pHandle) <- createProcess (proc "svn" ["status"]) { std_out = CreatePipe,
         std_err = CreatePipe }
-    hGetContents outStream <&> (readModel :: String -> NoChangelistModel) <&> toString >>= putStrLn
+    hGetContents outStream <&> (readModel :: String -> ClOnTopModel) <&> toString >>= putStrLn
     return ()

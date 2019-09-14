@@ -2,7 +2,9 @@ module Parser where
 
 import Data.Function
 import Data.Functor
-import Data.List
+import qualified Data.List as L
+import qualified Data.Map as M
+import Data.List.Split
 
 class SvnFlag a where
     parseFlag :: Char -> a
@@ -140,6 +142,12 @@ data ChangeList = ChangeList
     { clModifiedFiles :: [SvnFile]
     , clAddedFiles :: [SvnFile]
     }
+    deriving (Eq, Show)
+
+fromList :: [SvnFile] -> ChangeList
+fromList files = ChangeList
+    (filter isModified files)
+    (filter ((== MsAdded) . getModificationStatus) files)
 
 toFiles :: String -> [SvnFile]
 toFiles = lines <&> (fmap parseSvnFile)
@@ -155,6 +163,15 @@ getFile :: SvnStatusLine -> SvnFile
 getFile (File f) = f
 getFile _ = undefined
 
+isEmptyLine :: SvnStatusLine -> Bool
+isEmptyLine EmptyLine = True
+isEmptyLine _ = False
+
+isCl :: SvnStatusLine -> Bool
+isCl (ChangelistSeparator _) = True
+isCl _ = False
+
+
 parseSvnOutput :: String -> [SvnStatusLine]
 parseSvnOutput out = fmap read $ lines out
 
@@ -168,7 +185,7 @@ instance Read SvnStatusLine where
             [((parse line), rest)]
         where
             parse string
-                | "--- Changelist " `isPrefixOf` string = ChangelistSeparator $ extractChangelistName string
+                | "--- Changelist " `L.isPrefixOf` string = ChangelistSeparator $ extractChangelistName string
                 | string == "" = EmptyLine
                 | otherwise = File $ parseSvnFile string
             extractChangelistName string = take (length withoutStartingQuote - 2) withoutStartingQuote
@@ -179,4 +196,38 @@ instance Read SvnStatusLine where
 readModel :: ChangesModel a => String -> a
 readModel str = build $ parseSvnOutput str
 
+data ClOnTopModel = ClOnTopModel
+    { xUntracked :: [SvnFile]
+    , xModified :: [SvnFile]
+    , changeLists :: M.Map String ChangeList
+    }
+    deriving (Eq, Show)
+
+withUntracked :: [SvnFile] -> ClOnTopModel -> ClOnTopModel
+withUntracked files (ClOnTopModel ut m cls) = ClOnTopModel (ut ++ files) m cls
+
+withModifed :: [SvnFile] -> ClOnTopModel -> ClOnTopModel
+withModifed fs m = ClOnTopModel (xUntracked m) (xModified m ++ fs) (changeLists m)
+
+instance ChangesModel ClOnTopModel where
+    build svnLines = let
+        nonEmptyLines = filter (not . isEmptyLine) svnLines
+        splat = split (keepDelimsL $ whenElt isCl) nonEmptyLines
+      in
+        buildModel splat $ ClOnTopModel [] [] $ M.empty
+      where
+        buildModel :: [[SvnStatusLine]] -> ClOnTopModel -> ClOnTopModel
+        buildModel [] m = m
+        buildModel ([]:ss) m = buildModel ss m
+        buildModel (s:ss) m = if isCl $ head s
+          then m
+          else buildModel ss $ withUntracked untrackedHere
+            $ withModifed modifiedHere
+            $ m
+            where
+              files = map getFile $ filter isFile s
+              modifiedHere = filter isModified files
+              untrackedHere = filter ((MsUntracked ==) . getModificationStatus) files
+
+    toString = show
 
