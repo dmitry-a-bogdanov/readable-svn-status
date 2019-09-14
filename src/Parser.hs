@@ -107,10 +107,6 @@ class ChangesModel a where
     build :: [SvnStatusLine] -> a
     toString :: a -> String
 
-data NoChangelistModel = NoChangelistModel
-    { modifiedFiles :: [SvnFile]
-    , untrackedFiles :: [SvnFile]
-    }
 
 data TextStyle = Escape | Red | Green | Blue | Reset | BoldBlack deriving (Show)
 
@@ -126,23 +122,6 @@ getString Reset = "0m"
 withStyle :: TextStyle -> String -> String
 withStyle style text = (getString Escape) <> (getString style) <> text <> (getString Escape) <> (getString Reset)
 
-
-instance ChangesModel NoChangelistModel where
-    build statusLines = let files = map getFile $ filter isFile statusLines in NoChangelistModel
-        (filter isModified files)
-        (filter isUntracked files)
-
-    toString model = (showFiles (withStyle Blue) "Modified files:" (modifiedFiles model)) ++
-        "\n" ++
-        (showFiles (withStyle Red) (withStyle BoldBlack "Untracked files:") (untrackedFiles model))
-        where
-            showFiles :: (String -> String) -> String -> [SvnFile] -> String
-            showFiles styler header files = let
-                    fileNames = map getPath files
-                    coloredFileNames = map styler fileNames
-                    fileRows = map (\x -> (tab 4) ++ x ++ "\n") coloredFileNames
-                in
-                    if null fileRows then "" else header <> "\n" <> concat fileRows
 
 data ChangeList = ChangeList
     { clModifiedFiles :: [SvnFile]
