@@ -74,8 +74,8 @@ parsePath (ParsingState str ctor) = ctor str
 skipChar n (ParsingState str ctor) = ParsingState (drop n str) ctor
 
 
-parseSvnStatusLine :: String -> SvnFile
-parseSvnStatusLine str = (parseOneFlag (ParsingState str SvnFile))
+parseSvnFile :: String -> SvnFile
+parseSvnFile str = (parseOneFlag (ParsingState str SvnFile))
     & parseOneFlag
     & skipChar 6
     & parsePath
@@ -131,9 +131,34 @@ instance ChangesModel NoChangelistModel where
                 in
                     if null fileRows then "" else header <> "\n" <> concat fileRows
 
+data ChangeList = ChangeList
+    { clModifiedFiles :: [SvnFile]
+    , clAddedFiles :: [SvnFile]
+    }
 
 toFiles :: String -> [SvnFile]
-toFiles = lines <&> (fmap parseSvnStatusLine)
+toFiles = lines <&> (fmap parseSvnFile)
+
+data SvnStatusLine = File SvnFile | ChangelistSeparator String | EmptyLine
+    deriving (Show)
+
+instance Read SvnStatusLine where
+    readsPrec _ str = let
+            isLineBreak = ('\n' ==)
+            brokenStr = break isLineBreak str
+            line = fst brokenStr
+            rest = dropWhile isLineBreak $ snd brokenStr
+        in
+            [((parse line), rest)]
+        where
+            parse string
+                | "--- Changelist " `isPrefixOf` string = ChangelistSeparator $ extractChangelistName string
+                | string == "" = EmptyLine
+                | otherwise = File $ parseSvnFile string
+            extractChangelistName string = take (length withoutStartingQuote - 2) withoutStartingQuote
+                    where
+                        withoutPrefix = dropWhile (/= '\'') string
+                        withoutStartingQuote = drop 1 withoutPrefix
 
 readModel :: ChangesModel a => String -> a
 readModel str = build $ toFiles str
