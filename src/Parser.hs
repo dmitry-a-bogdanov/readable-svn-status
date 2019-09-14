@@ -64,7 +64,7 @@ data SvnFile = SvnFile
     , getPropStatus :: PropStatus
     , getPath :: FilePath
     }
-    deriving (Show)
+    deriving (Show, Eq)
 
 data ParsingState c = ParsingState String c
 
@@ -96,7 +96,7 @@ tab :: Int -> String
 tab = flip replicate ' '
 
 class ChangesModel a where
-    build :: [SvnFile] -> a
+    build :: [SvnStatusLine] -> a
     toString :: a -> String
 
 data NoChangelistModel = NoChangelistModel
@@ -120,7 +120,7 @@ withStyle style text = (getString Escape) <> (getString style) <> text <> (getSt
 
 
 instance ChangesModel NoChangelistModel where
-    build files = NoChangelistModel
+    build statusLines = let files = map getFile $ filter isFile statusLines in NoChangelistModel
         (filter isModified files)
         (filter isUntracked files)
 
@@ -145,7 +145,18 @@ toFiles :: String -> [SvnFile]
 toFiles = lines <&> (fmap parseSvnFile)
 
 data SvnStatusLine = File SvnFile | ChangelistSeparator String | EmptyLine
-    deriving (Show)
+    deriving (Show, Eq)
+
+isFile :: SvnStatusLine -> Bool
+isFile (File _) = True
+isFile _ = False
+
+getFile :: SvnStatusLine -> SvnFile
+getFile (File f) = f
+getFile _ = undefined
+
+parseSvnOutput :: String -> [SvnStatusLine]
+parseSvnOutput out = fmap read $ lines out
 
 instance Read SvnStatusLine where
     readsPrec _ str = let
@@ -166,6 +177,6 @@ instance Read SvnStatusLine where
                         withoutStartingQuote = drop 1 withoutPrefix
 
 readModel :: ChangesModel a => String -> a
-readModel str = build $ toFiles str
+readModel str = build $ parseSvnOutput str
 
 

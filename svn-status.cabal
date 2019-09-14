@@ -6,7 +6,7 @@ version:             0.1.0.0
 -- synopsis:
 -- description:
 -- license:
-license-file:        LICENSE
+-- license-file:        LICENSE
 author:              Dmitry Bogdanov
 maintainer:          dmitry.a.bogdanov@gmail.com
 -- copyright:
@@ -19,6 +19,7 @@ library parser
   hs-source-dirs:      src
   exposed-modules:     Parser
   build-depends:       base >=4.11 && <4.12
+  default-language:    Haskell2010
 
 executable svn-status
   main-is:             svn-status.hs
@@ -32,9 +33,10 @@ executable svn-status
 test-suite tests
   main-is:             tests.hs
   type:                exitcode-stdio-1.0
-  hs-source-dirs:      tests
+  hs-source-dirs:      tests src
   build-depends:       base,
                        test-framework,
                        test-framework-hunit,
                        HUnit
+  other-modules:       Parser
   default-language:    Haskell2010
