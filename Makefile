@@ -1,17 +1,11 @@
 
 
-.PHONY: all clear
+.PHONY: all build test
 
-all: svn-status tests
+all: build test
 
-svn-status: svn-status.hs parser.hs
-	ghc -o svn-status svn-status.hs parser.hs
+build:
+	cabal build
 
-tests: tests.hs parser.hs
-	ghc -o tests tests.hs
-	./tests
-
-clear:
-	rm -f svn-status
-	rm -f svn-status.hi
-	rm -f svn-status.o
+test: build
+	cabal test

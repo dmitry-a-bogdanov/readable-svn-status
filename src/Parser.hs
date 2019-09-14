@@ -9,6 +9,7 @@ class SvnFlag a where
 
 cutFlag :: SvnFlag a => String -> (a, String)
 cutFlag (flagChar:rest) = (parseFlag flagChar, rest)
+cutFlag _ = undefined
 
 
 data ModificationStatus = MsNoModification
@@ -67,10 +68,14 @@ data SvnFile = SvnFile
 
 data ParsingState c = ParsingState String c
 
+parseOneFlag :: SvnFlag t => ParsingState (t -> c) -> ParsingState c
 parseOneFlag (ParsingState (c:chrs) ctor) = ParsingState chrs (ctor $ parseFlag c)
+parseOneFlag _ = undefined
 
+parsePath :: ParsingState (String -> t) -> t
 parsePath (ParsingState str ctor) = ctor str
 
+skipChar :: Int -> ParsingState c -> ParsingState c
 skipChar n (ParsingState str ctor) = ParsingState (drop n str) ctor
 
 
