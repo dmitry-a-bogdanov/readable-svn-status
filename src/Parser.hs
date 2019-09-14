@@ -2,9 +2,12 @@ module Parser where
 
 import Data.Function
 import Data.Functor
+import Data.Maybe
 import qualified Data.List as L
 import qualified Data.Map as M
 import Data.List.Split
+import Prelude
+
 
 class SvnFlag a where
     parseFlag :: Char -> a
@@ -96,6 +99,9 @@ isUntracked = (MsUntracked ==) . getModificationStatus
 
 tab :: Int -> String
 tab = flip replicate ' '
+
+tabbed :: Int -> String -> String
+tabbed n text = (tab n) ++ text
 
 class ChangesModel a where
     build :: [SvnStatusLine] -> a
@@ -229,5 +235,13 @@ instance ChangesModel ClOnTopModel where
               modifiedHere = filter isModified files
               untrackedHere = filter ((MsUntracked ==) . getModificationStatus) files
 
-    toString = show
-
+    toString m = unlines $ catMaybes
+            [ Just $ withStyle BoldBlack "Files not related to any changelist:"
+            , showNonEmpty "Not tracked files:" Red $ xUntracked m
+            , showNonEmpty "Modified files:" Green $ xModified m
+            ]
+        where
+            showNonEmpty :: String -> TextStyle -> [SvnFile] -> Maybe String
+            showNonEmpty header filesStyle files = if null files
+                then Nothing
+                else Just $ unlines (header:(map (\f -> tabbed 4 $ withStyle filesStyle $ getPath f) files))
