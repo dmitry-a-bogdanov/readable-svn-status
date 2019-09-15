@@ -17,14 +17,15 @@ cabal-version:       >=1.10
 
 library parser
   hs-source-dirs:      src
-  exposed-modules:     Parser
+  exposed-modules:     Parser,
+                       StatusPrinter
   build-depends:       base >=4.11 && <4.12, containers, split
   default-language:    Haskell2010
   ghc-options:         -Wall
 
 executable svn-status
   main-is:             svn-status.hs
-  other-modules:       Parser
+  other-modules:       Parser, StatusPrinter
   -- other-extensions:
   build-depends:       base >=4.11 && <4.12, process, containers, split
   hs-source-dirs: src
@@ -41,5 +42,5 @@ test-suite tests
                        HUnit,
                        containers,
                        split
-  other-modules:       Parser
+  other-modules:       Parser, StatusPrinter
   default-language:    Haskell2010

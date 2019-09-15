@@ -7,6 +7,7 @@ import qualified Data.List as L
 import qualified Data.Map as M
 import Data.List.Split
 import Prelude
+import StatusPrinter
 
 
 class SvnFlag a where
@@ -97,30 +98,11 @@ isModified = (MsModified ==) . getModificationStatus
 isUntracked :: SvnFile -> Bool
 isUntracked = (MsUntracked ==) . getModificationStatus
 
-tab :: Int -> String
-tab = flip replicate ' '
-
-tabbed :: Int -> String -> String
-tabbed n text = (tab n) ++ text
 
 class ChangesModel a where
     build :: [SvnStatusLine] -> a
     toString :: a -> String
 
-
-data TextStyle = Escape | Red | Green | Blue | Reset | BoldBlack deriving (Show)
-
-getString :: TextStyle -> String
-getString Escape = "\x1b["
-getString Red = "0;31m"
-getString Green = "0;32m"
-getString Blue = "0;34m"
-getString BoldBlack = "1;30m"
-getString Reset = "0m"
-
-
-withStyle :: TextStyle -> String -> String
-withStyle style text = (getString Escape) <> (getString style) <> text <> (getString Escape) <> (getString Reset)
 
 
 data ChangeList = ChangeList
