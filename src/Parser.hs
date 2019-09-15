@@ -10,8 +10,10 @@ import Prelude
 import StatusPrinter
 
 
-class SvnFlag a where
+class (Eq a) => SvnFlag a where
     parseFlag :: Char -> a
+
+    getFromFile :: SvnFile -> a
 
 cutFlag :: SvnFlag a => String -> (a, String)
 cutFlag (flagChar:rest) = (parseFlag flagChar, rest)
@@ -45,6 +47,8 @@ instance SvnFlag ModificationStatus where
     parseFlag '~' = MsKindChanged
     parseFlag _ = undefined
 
+    getFromFile = getModificationStatus
+
 
 data PropStatus = PsNoModification
     | PsModified
@@ -57,12 +61,7 @@ instance SvnFlag PropStatus where
     parseFlag 'C' = PsConflict
     parseFlag _ = undefined
 
-
-data DummyFlag = DummyFlag
-    deriving (Eq, Show)
-
-instance SvnFlag DummyFlag where
-    parseFlag _ = DummyFlag
+    getFromFile = getPropStatus
 
 
 data SvnFile = SvnFile
@@ -98,23 +97,32 @@ isModified = (MsModified ==) . getModificationStatus
 isUntracked :: SvnFile -> Bool
 isUntracked = (MsUntracked ==) . getModificationStatus
 
-
-class ChangesModel a where
-    build :: [SvnStatusLine] -> a
-    toString :: a -> String
-
-
-
 data ChangeList = ChangeList
     { clModifiedFiles :: [SvnFile]
     , clAddedFiles :: [SvnFile]
+    , notTracked :: [SvnFile] -- meaningful only for anonymous changelist. Just to simplify handling
     }
     deriving (Eq, Show)
 
+type FilesWithHeader = (String, [SvnFile])
+
+showFiles :: FilesWithHeader -> Maybe String
+showFiles (_, []) = Nothing
+showFiles (header, files) = Just $ unlines (header:(map getPath files))
+
+showChangelistContent :: ChangeList -> String
+showChangelistContent cl = unlines $ catMaybes $ map showFiles
+    [ ("Not tracked files:", notTracked cl)
+    , ("Modified files:", clModifiedFiles cl)
+    , ("Files added under version control: ", clAddedFiles cl)
+    ]
+
+
 fromList :: [SvnFile] -> ChangeList
 fromList files = ChangeList
-    (filter isModified files)
-    (filter ((== MsAdded) . getModificationStatus) files)
+    (filterByFlag MsModified files)
+    (filterByFlag MsAdded files)
+    (filterByFlag MsUntracked files)
 
 toFiles :: String -> [SvnFile]
 toFiles = lines <&> (fmap parseSvnFile)
@@ -142,6 +150,9 @@ isCl _ = False
 parseSvnOutput :: String -> [SvnStatusLine]
 parseSvnOutput out = fmap read $ lines out
 
+filterByFlag :: SvnFlag a => a -> [SvnFile] -> [SvnFile]
+filterByFlag flag files = filter (\x -> flag == getFromFile x) files
+
 instance Read SvnStatusLine where
     readsPrec _ str = let
             isLineBreak = ('\n' ==)
@@ -160,7 +171,7 @@ instance Read SvnStatusLine where
                         withoutPrefix = dropWhile (/= '\'') string
                         withoutStartingQuote = drop 1 withoutPrefix
 
-readModel :: ChangesModel a => String -> a
+readModel :: String -> ClOnTopModel
 readModel str = build $ parseSvnOutput str
 
 data ClOnTopModel = ClOnTopModel
@@ -170,39 +181,46 @@ data ClOnTopModel = ClOnTopModel
     }
     deriving (Eq, Show)
 
+addFiles :: [SvnFile] -> ClOnTopModel -> (ClOnTopModel -> [SvnFile]) -> [SvnFile]
+addFiles files model getter = (getter model) ++ files
+
+
 withUntracked :: [SvnFile] -> ClOnTopModel -> ClOnTopModel
-withUntracked files (ClOnTopModel ut m cls) = ClOnTopModel (ut ++ files) m cls
+withUntracked files m = m { xUntracked = addFiles files m xUntracked }
+
 
 withModifed :: [SvnFile] -> ClOnTopModel -> ClOnTopModel
-withModifed fs m = ClOnTopModel (xUntracked m) (xModified m ++ fs) (changeLists m)
+withModifed files m = m { xModified = addFiles files m xModified }
 
-instance ChangesModel ClOnTopModel where
-    build svnLines = let
-        nonEmptyLines = filter (not . isEmptyLine) svnLines
-        splat = split (keepDelimsL $ whenElt isCl) nonEmptyLines
-      in
-        buildModel splat $ ClOnTopModel [] [] $ M.empty
-      where
-        buildModel :: [[SvnStatusLine]] -> ClOnTopModel -> ClOnTopModel
-        buildModel [] m = m
-        buildModel ([]:ss) m = buildModel ss m
-        buildModel (s:ss) m = if isCl $ head s
-          then m
-          else buildModel ss $ withUntracked untrackedHere
-            $ withModifed modifiedHere
-            $ m
-            where
-              files = map getFile $ filter isFile s
-              modifiedHere = filter isModified files
-              untrackedHere = filter ((MsUntracked ==) . getModificationStatus) files
 
-    toString m = unlines $ catMaybes
-            [ Just $ withStyle BoldBlack "Files not related to any changelist:"
-            , showNonEmpty "Not tracked files:" Red $ xUntracked m
-            , showNonEmpty "Modified files:" Green $ xModified m
-            ]
+build :: [SvnStatusLine] -> ClOnTopModel
+build svnLines = let
+    nonEmptyLines = filter (not . isEmptyLine) svnLines
+    splat = split (keepDelimsL $ whenElt isCl) nonEmptyLines
+  in
+    buildModel splat $ ClOnTopModel [] [] $ M.empty
+  where
+    buildModel :: [[SvnStatusLine]] -> ClOnTopModel -> ClOnTopModel
+    buildModel [] m = m
+    buildModel ([]:ss) m = buildModel ss m
+    buildModel (s:ss) m = if isCl $ head s
+      then m
+      else buildModel ss $ withUntracked untrackedHere
+        $ withModifed modifiedHere
+        $ m
         where
-            showNonEmpty :: String -> TextStyle -> [SvnFile] -> Maybe String
-            showNonEmpty header filesStyle files = if null files
-                then Nothing
-                else Just $ unlines (header:(map (\f -> tabbed 4 $ withStyle filesStyle $ getPath f) files))
+          files = map getFile $ filter isFile s
+          modifiedHere = filterByFlag MsModified files
+          untrackedHere = filterByFlag MsUntracked files
+
+toString :: ClOnTopModel -> String
+toString m = unlines $ catMaybes
+        [ Just $ withStyle BoldBlack "Files not related to any changelist:"
+        , showNonEmpty "Not tracked files:" Red $ xUntracked m
+        , showNonEmpty "Modified files:" Green $ xModified m
+        ]
+    where
+        showNonEmpty :: String -> TextStyle -> [SvnFile] -> Maybe String
+        showNonEmpty header filesStyle files = if null files
+            then Nothing
+            else Just $ unlines (header:(map (\f -> tabbed 4 $ withStyle filesStyle $ getPath f) files))
