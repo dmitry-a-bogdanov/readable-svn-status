@@ -98,9 +98,11 @@ isUntracked :: SvnFile -> Bool
 isUntracked = (MsUntracked ==) . getModificationStatus
 
 data ChangeList = ChangeList
-    { clModifiedFiles :: [SvnFile]
-    , clAddedFiles :: [SvnFile]
-    , notTracked :: [SvnFile] -- meaningful only for anonymous changelist. Just to simplify handling
+    { modified :: [SvnFile]
+    , added :: [SvnFile]
+    , notTracked :: [SvnFile] -- meaningful only for anonymous changelist. Just to simplify handling.
+    , notRecognized :: [SvnFile] -- it's hard to support all svn flags from scratch. here will be files not included
+                              -- to well-known lists.
     }
     deriving (Eq, Show)
 
@@ -113,16 +115,32 @@ showFiles (header, files) = Just $ unlines (header:(map getPath files))
 showChangelistContent :: ChangeList -> String
 showChangelistContent cl = unlines $ catMaybes $ map showFiles
     [ ("Not tracked files:", notTracked cl)
-    , ("Modified files:", clModifiedFiles cl)
-    , ("Files added under version control: ", clAddedFiles cl)
+    , ("Modified files:", modified cl)
+    , ("Files added under version control:", added cl)
+    , ("Files not recognized by wrapper :(", notRecognized cl)
     ]
 
 
 fromList :: [SvnFile] -> ChangeList
-fromList files = ChangeList
-    (filterByFlag MsModified files)
-    (filterByFlag MsAdded files)
-    (filterByFlag MsUntracked files)
+fromList files =
+    fillUnrecognized files $ fillRecognized files
+  where
+    fillRecognized :: [SvnFile] -> ChangeList
+    fillRecognized fs = ChangeList
+      (filterByFlag MsModified fs)
+      (filterByFlag MsAdded fs)
+      (filterByFlag MsUntracked fs)
+      []
+
+    fillUnrecognized :: [SvnFile] -> ChangeList -> ChangeList
+    fillUnrecognized fs cl = cl { notRecognized = uniqFiles L.\\ recognizedFiles }
+      where
+        uniqFiles = L.nub $ fs
+        recognizedFiles = L.nub $ concat $ map ($ cl)
+            [ notTracked
+            , modified
+            , added
+            ]
 
 toFiles :: String -> [SvnFile]
 toFiles = lines <&> (fmap parseSvnFile)
@@ -145,6 +163,10 @@ isEmptyLine _ = False
 isCl :: SvnStatusLine -> Bool
 isCl (ChangelistSeparator _) = True
 isCl _ = False
+
+getClName :: SvnStatusLine -> String
+getClName (ChangelistSeparator name) = name
+getClName _ = undefined
 
 
 parseSvnOutput :: String -> [SvnStatusLine]
@@ -171,56 +193,43 @@ instance Read SvnStatusLine where
                         withoutPrefix = dropWhile (/= '\'') string
                         withoutStartingQuote = drop 1 withoutPrefix
 
-readModel :: String -> ClOnTopModel
+type ChangesModel = M.Map String ChangeList
+
+
+readModel :: String -> ChangesModel
 readModel str = build $ parseSvnOutput str
 
-data ClOnTopModel = ClOnTopModel
-    { xUntracked :: [SvnFile]
-    , xModified :: [SvnFile]
-    , changeLists :: M.Map String ChangeList
-    }
-    deriving (Eq, Show)
-
-addFiles :: [SvnFile] -> ClOnTopModel -> (ClOnTopModel -> [SvnFile]) -> [SvnFile]
-addFiles files model getter = (getter model) ++ files
-
-
-withUntracked :: [SvnFile] -> ClOnTopModel -> ClOnTopModel
-withUntracked files m = m { xUntracked = addFiles files m xUntracked }
-
-
-withModifed :: [SvnFile] -> ClOnTopModel -> ClOnTopModel
-withModifed files m = m { xModified = addFiles files m xModified }
-
-
-build :: [SvnStatusLine] -> ClOnTopModel
+build :: [SvnStatusLine] -> ChangesModel
 build svnLines = let
     nonEmptyLines = filter (not . isEmptyLine) svnLines
     splat = split (keepDelimsL $ whenElt isCl) nonEmptyLines
   in
-    buildModel splat $ ClOnTopModel [] [] $ M.empty
+    buildModel splat M.empty
   where
-    buildModel :: [[SvnStatusLine]] -> ClOnTopModel -> ClOnTopModel
+    buildModel :: [[SvnStatusLine]] -> ChangesModel -> ChangesModel
     buildModel [] m = m
     buildModel ([]:ss) m = buildModel ss m
-    buildModel (s:ss) m = if isCl $ head s
-      then m
-      else buildModel ss $ withUntracked untrackedHere
-        $ withModifed modifiedHere
-        $ m
-        where
-          files = map getFile $ filter isFile s
-          modifiedHere = filterByFlag MsModified files
-          untrackedHere = filterByFlag MsUntracked files
+    buildModel (s:ss) m = let
+        changelistName = if isCl $ head s then getClName $ head s else ""
+      in
+        M.insert changelistName (fromList $ map getFile $ filter isFile s) $ buildModel ss m
 
-toString :: ClOnTopModel -> String
-toString m = unlines $ catMaybes
-        [ Just $ withStyle BoldBlack "Files not related to any changelist:"
-        , showNonEmpty "Not tracked files:" Red $ xUntracked m
-        , showNonEmpty "Modified files:" Green $ xModified m
-        ]
+type Lines = [String]
+
+toString :: ChangesModel -> String
+toString m = unlines $ M.foldlWithKey showNonEmpty [] m
     where
-        showNonEmpty :: String -> TextStyle -> [SvnFile] -> Maybe String
-        showNonEmpty header filesStyle files = if null files
-            then Nothing
-            else Just $ unlines (header:(map (\f -> tabbed 4 $ withStyle filesStyle $ getPath f) files))
+        showNonEmpty :: [String] -> String -> ChangeList -> [String]
+        showNonEmpty output changelistName cl = let
+            header = createHeader changelistName
+          in
+            output ++ [header, showChangelistContent cl]
+          where
+            createHeader :: String -> String
+            createHeader "" = withStyle BoldBlack "Files to related to any changeslist:"
+            createHeader x = unlines
+              [ withStyle BoldBlack ("Changelist '" ++ x ++ "':")
+              , "  (use \"svn changelist '" ++ x ++ "' <file>...\" to add files to this changelist)"
+              , "  (use \"svn changelist --remove <file>...\" to remove files from changelist)"
+              , "  (use \"svn commit --cl '" ++ x ++ "' -m <message> to commit this changelist)"
+              ]
