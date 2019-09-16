@@ -1,10 +1,13 @@
 module StatusPrinter
-  ( toString
+  ( showChanges
   ) where
 
-import Data.Maybe
+
 import qualified Data.Map as M
+import Text.Printf
+
 import Parser
+
 
 tab :: Int -> String
 tab = flip replicate ' '
@@ -12,7 +15,7 @@ tab = flip replicate ' '
 tabbed :: Int -> String -> String
 tabbed n text = (tab n) ++ text
 
-data TextStyle = Escape | Red | Green | Blue | Reset | BoldBlack deriving (Show)
+data TextStyle =  Escape | Red |  Green | Blue | Reset | BoldBlack deriving (Show)
 
 getString :: TextStyle -> String
 getString Escape = "\x1b["
@@ -26,20 +29,12 @@ getString Reset = "0m"
 type FilesWithHeader = (String, [SvnFile])
 
 
-showFiles :: FilesWithHeader -> Maybe String
-showFiles (_, []) = Nothing
-showFiles (header, files) = Just $ unlines (header:(map getPath files))
-
-
 withStyle :: TextStyle -> String -> String
 withStyle style text = (getString Escape) <> (getString style) <> text <> (getString Escape) <> (getString Reset)
 
-emptyChangeList :: ChangeList
-emptyChangeList = ChangeList [] [] [] []
 
-
-showChangelistContent :: ChangeList -> String
-showChangelistContent cl = unlines $ catMaybes $ map showFiles $ --filter (\(header, files) -> not $ null files)
+getClContentLines :: ChangeList -> [String]
+getClContentLines cl = mconcat $ map showFilesWithHeader $ --filter (\(header, files) -> not $ null files)
     [ ("Not tracked files:", notTracked cl)
     , ("Modified files:", modified cl)
     , ("Files added under version control:", added cl)
@@ -47,20 +42,26 @@ showChangelistContent cl = unlines $ catMaybes $ map showFiles $ --filter (\(hea
     ]
 
 
-toString :: ChangesModel -> String
-toString m = unlines $ M.foldlWithKey showNonEmpty [] m
-    where
-        showNonEmpty :: [String] -> String -> ChangeList -> [String]
-        showNonEmpty output changelistName cl = let
-            header = createHeader changelistName
-          in
-            if cl == emptyChangeList then output else output ++ [header, showChangelistContent cl]
-          where
-            createHeader :: String -> String
-            createHeader "" = withStyle BoldBlack "Files to related to any changeslist:"
-            createHeader x = unlines
-              [ withStyle BoldBlack ("Changelist '" ++ x ++ "':")
-              , "  (use \"svn changelist '" ++ x ++ "' <file>...\" to add files to this changelist)"
-              , "  (use \"svn changelist --remove <file>...\" to remove files from changelist)"
-              , "  (use \"svn commit --cl '" ++ x ++ "' -m <message> to commit this changelist)"
-              ]
+showFilesWithHeader :: FilesWithHeader -> [String]
+showFilesWithHeader (_, []) = []
+showFilesWithHeader (header, files) = [header] ++ map (tabbed 2 . getPath) files
+
+
+showChanges :: ChangesModel -> String
+showChanges m = unlines $ M.foldMapWithKey showChangeList m
+  where
+    showChangeList :: String -> ChangeList -> [String]
+    showChangeList name cl = let
+          headerLines = case name of
+            "" -> [ "Files to related to any changeslist:"
+                  ]
+            n -> [ printf "Changelist '%s':" n
+                 , printf "  (use \"svn changelist '%s' <file>...\" to add files to this changelist)" n
+                 , printf "  (use \"svn changelist --remove <file>...\" to remove files from changelist)"
+                 , printf "  (use \"svn commit --cl '%s' -m <message> to commit this changelist)" n
+                 , printf ""
+                 ]
+          content = getClContentLines cl
+        in case content of
+          [] -> []
+          someLines -> headerLines ++ map (tabbed 2) someLines ++ [""]
