@@ -6,5 +6,5 @@ import StatusPrinter
 
 main :: IO ()
 main = do
-    getContents <&> parseFileLists <&> showChanges >>= putStr
+    getContents <&> parseFileLists <&> (showChanges True) >>= putStr
     return ()
