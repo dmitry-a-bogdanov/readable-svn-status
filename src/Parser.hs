@@ -6,7 +6,13 @@ module Parser
   , ModificationStatus (..)
   , SvnFile (..)
   , PropStatus (..)
+  , LockStatus (..)
+  , HistoryStatus (..)
+  , SwitchStatus (..)
+  , LockInfo (..)
+  , ConflictStatus(..)
   , ChangeList (..)
+  , defaultFile
   ) where
 
 import Data.Function
@@ -66,12 +72,85 @@ instance SvnFlag PropStatus where
     getFromFile = getPropStatus
 
 
+data LockStatus = Locked | NotLocked
+  deriving (Eq, Show)
+
+
+instance SvnFlag LockStatus where
+  parseFlag ' ' = NotLocked
+  parseFlag 'L' = Locked
+  parseFlag _ = error "Unknown locked status"
+
+  getFromFile = locked
+
+data HistoryStatus = HasHistory | NoHistory
+  deriving (Eq, Show)
+
+
+instance SvnFlag HistoryStatus where
+  parseFlag '+' = HasHistory
+  parseFlag ' ' = NoHistory
+  parseFlag _ = error "Unknown history flag"
+
+  getFromFile = history
+
+
+data SwitchStatus = Switched | NotSwitched
+  deriving (Eq, Show)
+
+
+instance SvnFlag SwitchStatus where
+  parseFlag ' ' = NotSwitched
+  parseFlag 'S' = Switched
+  parseFlag _ = error "Unknown switched status"
+
+  getFromFile = switchStatus
+
+data LockInfo = LiNotLocked
+  | LiLocalLock
+  | LiOtherLocked
+  | LiStolen
+  | LiBroken
+  deriving (Eq, Show)
+
+
+instance SvnFlag LockInfo where
+  parseFlag ' ' = LiNotLocked
+  parseFlag 'K' = LiLocalLock
+  parseFlag 'O' = LiOtherLocked
+  parseFlag 'T' = LiStolen
+  parseFlag 'B' = LiBroken
+  parseFlag _ = error "Unknown lock info"
+
+  getFromFile = lockInfo
+
+
+data ConflictStatus = NoConflict | Conflict
+  deriving (Eq, Show)
+
+
+instance SvnFlag ConflictStatus where
+  parseFlag ' ' = NoConflict
+  parseFlag 'C' = Conflict
+  parseFlag _ = error "Unknown conflict status"
+
+  getFromFile = conflict
+
+
 data SvnFile = SvnFile
     { getModificationStatus :: ModificationStatus
     , getPropStatus :: PropStatus
+    , locked :: LockStatus
+    , history :: HistoryStatus
+    , switchStatus :: SwitchStatus
+    , lockInfo :: LockInfo
+    , conflict :: ConflictStatus
     , getPath :: FilePath
     }
     deriving (Show, Eq)
+
+defaultFile :: FilePath -> SvnFile
+defaultFile = SvnFile MsNoModification PsNoModification NotLocked NoHistory NotSwitched LiNotLocked NoConflict
 
 data ParsingState c = ParsingState String c
 
@@ -86,10 +165,16 @@ skipChar :: Int -> ParsingState c -> ParsingState c
 skipChar n (ParsingState str ctor) = ParsingState (drop n str) ctor
 
 
+
 parseSvnFile :: String -> SvnFile
 parseSvnFile str = (parseOneFlag (ParsingState str SvnFile))
     & parseOneFlag
-    & skipChar 6
+    & parseOneFlag
+    & parseOneFlag
+    & parseOneFlag
+    & parseOneFlag
+    & parseOneFlag
+    & skipChar 1
     & parsePath
 
 

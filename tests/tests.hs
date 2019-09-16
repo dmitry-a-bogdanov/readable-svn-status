@@ -14,6 +14,6 @@ main = defaultMain $ hUnitTestToTests $ TestList
         EmptyLine
         (parseLine "")
   , TestCase $ assertEqual "parse file"
-        (File $ SvnFile MsModified PsNoModification "trunk/icp_algorithm/cloud_io.hpp")
+        (File $ (defaultFile "trunk/icp_algorithm/cloud_io.hpp") { getModificationStatus = MsModified })
         (parseLine "M       trunk/icp_algorithm/cloud_io.hpp")
   ]
