@@ -1,4 +1,6 @@
 import Data.Functor
+import System.Console.ANSI
+import System.IO
 
 import Parser
 import StatusPrinter
@@ -6,5 +8,6 @@ import StatusPrinter
 
 main :: IO ()
 main = do
-    getContents <&> parseFileLists <&> (showChanges True) >>= putStr
+    colored <- hSupportsANSIColor stdout
+    getContents <&> parseFileLists <&> (showChanges colored) >>= putStr
     return ()
