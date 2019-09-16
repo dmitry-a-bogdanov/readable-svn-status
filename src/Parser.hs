@@ -1,22 +1,25 @@
-module Parser where
+module Parser
+  ( ChangesModel
+  , parseFileLists
+  , parseLine
+  , SvnStatusLine (..)
+  , ModificationStatus (..)
+  , SvnFile (..)
+  , PropStatus (..)
+  , ChangeList (..)
+  ) where
 
 import Data.Function
-import Data.Functor
 import Data.Maybe
 import qualified Data.List as L
 import qualified Data.Map as M
 import Prelude
-import StatusPrinter
 
 
 class (Eq a) => SvnFlag a where
     parseFlag :: Char -> a
 
     getFromFile :: SvnFile -> a
-
-cutFlag :: SvnFlag a => String -> (a, String)
-cutFlag (flagChar:rest) = (parseFlag flagChar, rest)
-cutFlag _ = undefined
 
 
 data ModificationStatus = MsNoModification
@@ -99,26 +102,6 @@ data ChangeList = ChangeList
     }
     deriving (Eq, Show)
 
-emptyChangeList :: ChangeList
-emptyChangeList = ChangeList [] [] [] []
-
-
-type FilesWithHeader = (String, [SvnFile])
-
-
-showFiles :: FilesWithHeader -> Maybe String
-showFiles (_, []) = Nothing
-showFiles (header, files) = Just $ unlines (header:(map getPath files))
-
-
-showChangelistContent :: ChangeList -> String
-showChangelistContent cl = unlines $ catMaybes $ map showFiles $ --filter (\(header, files) -> not $ null files)
-    [ ("Not tracked files:", notTracked cl)
-    , ("Modified files:", modified cl)
-    , ("Files added under version control:", added cl)
-    , ("Files not recognized by wrapper :(", notRecognized cl)
-    ]
-
 
 fromList :: [SvnFile] -> ChangeList
 fromList files =
@@ -155,43 +138,18 @@ parseLine string   | "--- Changelist " `L.isPrefixOf` string = ChangelistSeparat
                    | string == "" = EmptyLine
                    | otherwise = File $ parseSvnFile string
                    where
-                     extractChangelistName string = take (length withoutStartingQuote - 2) withoutStartingQuote
+                     extractChangelistName s = take (length withoutStartingQuote - 2) withoutStartingQuote
                        where
-                         withoutPrefix = dropWhile (/= '\'') string
+                         withoutPrefix = dropWhile (/= '\'') s
                          withoutStartingQuote = drop 1 withoutPrefix
 
 type ChangesModel = M.Map String ChangeList
-
-type Lines = [String]
-
-toString :: ChangesModel -> String
-toString m = unlines $ M.foldlWithKey showNonEmpty [] m
-    where
-        showNonEmpty :: [String] -> String -> ChangeList -> [String]
-        showNonEmpty output changelistName cl = let
-            header = createHeader changelistName
-          in
-            if cl == emptyChangeList then output else output ++ [header, showChangelistContent cl]
-          where
-            createHeader :: String -> String
-            createHeader "" = withStyle BoldBlack "Files to related to any changeslist:"
-            createHeader x = unlines
-              [ withStyle BoldBlack ("Changelist '" ++ x ++ "':")
-              , "  (use \"svn changelist '" ++ x ++ "' <file>...\" to add files to this changelist)"
-              , "  (use \"svn changelist --remove <file>...\" to remove files from changelist)"
-              , "  (use \"svn commit --cl '" ++ x ++ "' -m <message> to commit this changelist)"
-              ]
 
 
 data PState = PState
   { currentChangeListName :: String
   , changeLists :: M.Map String [SvnFile]
   }
-
-orDefault :: b -> (a -> Maybe b) -> a -> b
-orDefault defaultValue f value = case f value of
-    (Just x) -> x
-    Nothing -> defaultValue
 
 withFileInCl :: String -> SvnFile -> (M.Map String [SvnFile]) -> M.Map String [SvnFile]
 withFileInCl clName file cls = M.insert clName (fromMaybe [] (M.lookup clName cls) ++ [file]) cls
