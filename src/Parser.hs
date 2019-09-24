@@ -215,7 +215,7 @@ data SvnStatusLine = File SvnFile | ChangelistSeparator String | EmptyLine
 
 
 filterByFlag :: SvnFlag a => a -> [SvnFile] -> [SvnFile]
-filterByFlag flag files = filter (\x -> flag == getFromFile x) files
+filterByFlag flag files = filter ((flag ==) . getFromFile) files
 
 
 parseLine :: String -> SvnStatusLine
@@ -236,8 +236,10 @@ data PState = PState
   , changeLists :: M.Map String [SvnFile]
   }
 
+
 withFileInCl :: String -> SvnFile -> (M.Map String [SvnFile]) -> M.Map String [SvnFile]
-withFileInCl clName file cls = M.insert clName (fromMaybe [] (M.lookup clName cls) ++ [file]) cls
+withFileInCl clName file = flip M.alter clName $ Just . maybe [file] (++ [file])
+
 
 parseFileLists :: String -> ChangesModel
 parseFileLists string = M.map fromList $ changeLists $ foldl parseOneLine (PState "" M.empty) $ lines string
