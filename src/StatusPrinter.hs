@@ -7,6 +7,7 @@ import qualified Data.Map as M
 import Text.Printf
 
 import Parser
+import Types
 
 
 tab :: Int -> String

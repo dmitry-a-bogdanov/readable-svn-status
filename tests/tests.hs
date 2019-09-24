@@ -2,6 +2,7 @@ import Test.Framework
 import Test.Framework.Providers.HUnit
 import Test.HUnit
 import Parser
+import Types
 
 main = defaultMain $ hUnitTestToTests $ TestList
   [ TestCase $ assertEqual "parse changelist without endline"
