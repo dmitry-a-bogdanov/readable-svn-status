@@ -46,7 +46,7 @@ instance SvnFlag ModificationStatus where
     parseFlag '~' = MsKindChanged
     parseFlag _ = undefined
 
-    getFromFile = getModificationStatus
+    getFromFile = modificationStatus
 
 
 data PropStatus = PsNoModification
@@ -60,7 +60,7 @@ instance SvnFlag PropStatus where
     parseFlag 'C' = PsConflict
     parseFlag _ = undefined
 
-    getFromFile = getPropStatus
+    getFromFile = propStatus
 
 
 data LockStatus = Locked | NotLocked
@@ -70,9 +70,9 @@ data LockStatus = Locked | NotLocked
 instance SvnFlag LockStatus where
   parseFlag ' ' = NotLocked
   parseFlag 'L' = Locked
-  parseFlag _ = error "Unknown locked status"
+  parseFlag _ = error "Unknown lockStatus status"
 
-  getFromFile = locked
+  getFromFile = lockStatus
 
 data HistoryStatus = HasHistory | NoHistory
   deriving (Eq, Show)
@@ -81,9 +81,9 @@ data HistoryStatus = HasHistory | NoHistory
 instance SvnFlag HistoryStatus where
   parseFlag '+' = HasHistory
   parseFlag ' ' = NoHistory
-  parseFlag _ = error "Unknown history flag"
+  parseFlag _ = error "Unknown historyStatus flag"
 
-  getFromFile = history
+  getFromFile = historyStatus
 
 
 data SwitchStatus = Switched | NotSwitched
@@ -125,18 +125,18 @@ instance SvnFlag ConflictStatus where
   parseFlag 'C' = Conflict
   parseFlag _ = error "Unknown conflict status"
 
-  getFromFile = conflict
+  getFromFile = conflictStatus
 
 
 data SvnFile = SvnFile
-    { getModificationStatus :: ModificationStatus
-    , getPropStatus :: PropStatus
-    , locked :: LockStatus
-    , history :: HistoryStatus
+    { modificationStatus :: ModificationStatus
+    , propStatus :: PropStatus
+    , lockStatus :: LockStatus
+    , historyStatus :: HistoryStatus
     , switchStatus :: SwitchStatus
     , lockInfo :: LockInfo
-    , conflict :: ConflictStatus
-    , getPath :: FilePath
+    , conflictStatus :: ConflictStatus
+    , path :: FilePath
     }
     deriving (Show, Eq)
 

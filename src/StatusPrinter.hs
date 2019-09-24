@@ -49,7 +49,7 @@ getClContentLines colored cl = mconcat $ map (showFilesWithHeader colored) $
 
 showFilesWithHeader :: Bool -> FilesWithHeader -> [String]
 showFilesWithHeader _ (_, _, []) = []
-showFilesWithHeader colored (header, style, files) = [header] ++ map (tabbed 2 . (withStyleCond colored style) . getPath) files
+showFilesWithHeader colored (header, style, files) = [header] ++ map (tabbed 2 . (withStyleCond colored style) . path) files
 
 showChanges :: Bool -> ChangesModel -> String
 showChanges colored m = unlines $ M.foldMapWithKey showChangeList m
