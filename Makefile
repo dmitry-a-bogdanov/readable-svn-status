@@ -5,7 +5,7 @@
 all: build test
 
 build:
-	cabal build
+	cabal build --verbose=1
 
 test: build
 	cabal test
