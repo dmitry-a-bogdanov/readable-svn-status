@@ -44,7 +44,7 @@ instance SvnFlag ModificationStatus where
     parseFlag '?' = MsUntracked
     parseFlag '!' = MsMissing
     parseFlag '~' = MsKindChanged
-    parseFlag _ = undefined
+    parseFlag _ = error "Unknown modification status"
 
     getFromFile = modificationStatus
 
@@ -58,7 +58,7 @@ instance SvnFlag PropStatus where
     parseFlag ' ' = PsNoModification
     parseFlag 'M' = PsModified
     parseFlag 'C' = PsConflict
-    parseFlag _ = undefined
+    parseFlag _ = error "Unknown properies status"
 
     getFromFile = propStatus
 

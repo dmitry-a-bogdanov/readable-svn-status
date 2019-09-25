@@ -21,7 +21,7 @@ data ParsingState c = ParsingState String c
 
 parseOneFlag :: SvnFlag t => ParsingState (t -> c) -> ParsingState c
 parseOneFlag (ParsingState (c:chrs) ctor) = ParsingState chrs (ctor $ parseFlag c)
-parseOneFlag _ = undefined
+parseOneFlag _ = error "Malformed input"
 
 parsePath :: ParsingState (String -> t) -> t
 parsePath (ParsingState str ctor) = ctor str
