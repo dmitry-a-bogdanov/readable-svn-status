@@ -5,6 +5,7 @@ module Parser
   , SvnStatusLine (..)
   , ChangeList (..)
   , defaultFile
+  , FileGroup (..)
   ) where
 
 import Data.Function
@@ -41,13 +42,15 @@ parseSvnFile str = (parseOneFlag (ParsingState str SvnFile))
     & parsePath
 
 
-data ChangeList = ChangeList
-    { modified :: [SvnFile]
-    , added :: [SvnFile]
-    , notTracked :: [SvnFile]  {- meaningful only for anonymous changelist. Just to simplify handling. -}
-    , notRecognized :: [SvnFile]  {- it's hard to support all svn flags from scratch. here will be files not included
-                                     to well-known lists. -}
-    }
+data FileGroup
+  = Modified
+  | Added
+  | NotTracked
+  | NotRecognized
+  deriving (Bounded, Enum, Eq, Ord, Show)
+
+
+newtype ChangeList = ChangeList (M.Map FileGroup [SvnFile])
     deriving (Eq, Show)
 
 
@@ -56,21 +59,17 @@ fromList files =
     fillUnrecognized files $ fillRecognized files
   where
     fillRecognized :: [SvnFile] -> ChangeList
-    fillRecognized fs = ChangeList
-      (filterByFlag MsModified fs)
-      (filterByFlag MsAdded fs)
-      (filterByFlag MsUntracked fs)
-      []
+    fillRecognized fs = ChangeList $ M.fromList
+      [ (Modified, filterByFlag MsModified fs)
+      , (Added, filterByFlag MsAdded fs)
+      , (NotTracked, filterByFlag MsUntracked fs)
+      ]
 
     fillUnrecognized :: [SvnFile] -> ChangeList -> ChangeList
-    fillUnrecognized fs cl = cl { notRecognized = uniqFiles L.\\ recognizedFiles }
+    fillUnrecognized fs (ChangeList cl) = ChangeList $ M.insert NotRecognized (uniqFiles L.\\ recognizedFiles) cl
       where
         uniqFiles = L.nub $ fs
-        recognizedFiles = L.nub $ concat $ map ($ cl)
-            [ notTracked
-            , modified
-            , added
-            ]
+        recognizedFiles = L.nub $ M.foldl (++) [] cl
 
 
 data SvnStatusLine = File SvnFile | ChangelistSeparator String | EmptyLine
