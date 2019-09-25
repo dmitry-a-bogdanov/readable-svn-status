@@ -10,6 +10,7 @@ module Parser
 
 import Data.Function
 import Data.Maybe
+import Data.Bifunctor
 import qualified Data.List as L
 import qualified Data.Map as M
 import Prelude
@@ -44,9 +45,12 @@ parseSvnFile str = (parseOneFlag (ParsingState str SvnFile))
 
 data FileGroup
   = Modified
+  | ModifiedProperties
   | Added
-  | NotTracked
+  | Deleted
   | NotRecognized
+  | NotTracked
+  | NotTouched
   deriving (Bounded, Enum, Eq, Ord, Show)
 
 
@@ -59,10 +63,22 @@ fromList files =
     fillUnrecognized files $ fillRecognized files
   where
     fillRecognized :: [SvnFile] -> ChangeList
-    fillRecognized fs = ChangeList $ M.fromList
-      [ (Modified, filterByFlag MsModified fs)
-      , (Added, filterByFlag MsAdded fs)
-      , (NotTracked, filterByFlag MsUntracked fs)
+    fillRecognized fs = ChangeList $ M.fromList $ map (second $ flip filter fs)
+      [ (Modified, hasFlag MsModified)
+      , (Added, hasFlag MsAdded)
+      , (NotTracked, hasFlag MsUntracked)
+      , (NotTouched, (\x -> and $ map ($ x)
+          [ hasFlag MsNoModification
+          , hasFlag PsNoModification
+          , hasFlag NotLocked
+          , hasFlag NoHistory
+          , hasFlag NotSwitched
+          , hasFlag LiNotLocked
+          , hasFlag NoConflict
+          ]
+        ))
+      , (ModifiedProperties, hasFlag PsModified)
+      , (Deleted, hasFlag MsDeleted)
       ]
 
     fillUnrecognized :: [SvnFile] -> ChangeList -> ChangeList
@@ -76,8 +92,8 @@ data SvnStatusLine = File SvnFile | ChangelistSeparator String | EmptyLine
     deriving (Show, Eq)
 
 
-filterByFlag :: SvnFlag a => a -> [SvnFile] -> [SvnFile]
-filterByFlag flag files = filter ((flag ==) . getFromFile) files
+hasFlag :: SvnFlag a => a -> SvnFile -> Bool
+hasFlag flag = (flag ==) . getFromFile
 
 
 parseLine :: String -> SvnStatusLine

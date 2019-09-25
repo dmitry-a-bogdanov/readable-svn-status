@@ -36,53 +36,40 @@ instance Printable [[TextElem]] where
   toPrintableString colored lns = unlines $ map (toPrintableString colored) lns
 
 
-tab :: Int -> String
-tab = flip replicate ' '
-
-
 tabbed :: Int -> StatusLine -> StatusLine
-tabbed n line = [Text $ tab n] ++ line
-
-
-wrapped :: Semigroup a => a -> a -> a -> a
-wrapped headList tailList content = headList <> content <> tailList
+tabbed n line = [Text $ replicate n ' '] ++ line
 
 
 withStyle :: SGR -> StatusLine -> StatusLine
-withStyle lineStyle = wrapped [Style lineStyle] [Style Reset]
-
-
-withConsoleIntensity :: ConsoleIntensity -> StatusLine -> StatusLine
-withConsoleIntensity consoleIntensity = withStyle $ SetConsoleIntensity consoleIntensity
+withStyle lineStyle line = [Style lineStyle] ++ line ++ [Style Reset]
 
 
 stringToLine :: String -> StatusLine
 stringToLine text = [Text text]
 
 
-header :: FileGroup -> StatusLine
-header = return . Text . (++ ":") . hdr where
-  hdr :: FileGroup -> String
-  hdr Modified = "Modified files"
-  hdr Added = "Files added under version control"
-  hdr NotTracked = "Not tracked files"
-  hdr NotRecognized = "Files not recognized by wrapper. Please report to dmitry.a.bogdanov@gmail.com"
-
-
-dullColor :: Color -> SGR
-dullColor = SetColor Foreground Dull
-
-
-style :: FileGroup -> SGR
-style Modified = dullColor Green
-style Added = dullColor Green
-style NotTracked = dullColor Red
-style NotRecognized = dullColor Blue
-
-
-showClPart :: FileGroup -> [SvnFile] -> [StatusLine]
-showClPart _ [] = []
-showClPart grp files = [header grp] ++ map (withStyle (style grp) . tabbed 2 . return . Text  . path) files
+showFilesGroup :: FileGroup -> [SvnFile] -> [StatusLine]
+showFilesGroup _ [] = []
+showFilesGroup grp files = let
+    (headerText, filesStyle) = fgShowProperties grp
+    headerLine = stringToLine . (++ ":") $ headerText
+    styledFiles = map (withStyle filesStyle . stringToLine . path) files
+  in
+    [headerLine] ++ map (tabbed 2) styledFiles
+  where
+    fgShowProperties :: FileGroup -> (String, SGR)
+    fgShowProperties fg = case fg of
+      Modified           -> ("Modified files", dullColor Green)
+      Added              -> ("Files added under version control", dullColor Green)
+      NotTracked         -> ("Not tracked files", dullColor Red)
+      NotRecognized      -> ("Files not recognized by wrapper. Please report to dmitry.a.bogdanov@gmail.com",
+                             dullColor Blue)
+      NotTouched         -> ("Related to changelist but not modified", dullColor Black)
+      ModifiedProperties -> ("Files with modified properties", dullColor Yellow)
+      Deleted            -> ("Deleted files", dullColor Red)
+      where
+        dullColor :: Color -> SGR
+        dullColor = SetColor Foreground Dull
 
 
 showChanges :: Bool -> ChangesModel -> String
@@ -90,16 +77,23 @@ showChanges colored m = toPrintableString colored $ M.foldMapWithKey showChangeL
   where
     showChangeList :: String -> ChangeList -> [StatusLine]
     showChangeList name (ChangeList cl) = let
-        headerLines = case name of
-          "" -> [ withConsoleIntensity BoldIntensity $ stringToLine "Files to related to any changeslist:"
+        headerLines = map stringToLine $ case name of
+          "" -> [ "Files to related to any changeslist:"
                 ]
-          n -> [ withConsoleIntensity BoldIntensity $ stringToLine $ printf "Changelist '%s':" n
-               , stringToLine $ printf "  (use \"svn changelist '%s' <file>...\" to add files to this changelist)" n
-               , stringToLine $ printf "  (use \"svn changelist --remove <file>...\" to remove files from changelist)"
-               , stringToLine $ printf "  (use \"svn commit --cl '%s' -m <message> to commit this changelist)" n
-               , stringToLine $ printf ""
+          n -> [ printf "Changelist '%s':" n
+               , printf "  (use \"svn changelist '%s' <file>...\" to add files to this changelist)" n
+               , printf "  (use \"svn changelist --remove <file>...\" to remove files from changelist)"
+               , printf "  (use \"svn commit --cl '%s' -m <message> to commit this changelist)" n
+               , printf ""
                ]
-        content = M.foldMapWithKey showClPart cl
+        content = M.foldMapWithKey showFilesGroup cl
+        updateFirst :: (a -> a) -> [a] -> [a]
+        updateFirst _ [] = []
+        updateFirst f (x:xs) = (f x):xs
       in case content of
         [] -> []
-        someLines -> headerLines ++ (map (tabbed 2 ) someLines) ++ [[Text ""]]
+        someLines -> updateFirst (withConsoleIntensity BoldIntensity)
+          headerLines ++ (map (tabbed 2 ) someLines) ++ [stringToLine ""]
+          where
+            withConsoleIntensity :: ConsoleIntensity -> StatusLine -> StatusLine
+            withConsoleIntensity consoleIntensity = withStyle $ SetConsoleIntensity consoleIntensity
