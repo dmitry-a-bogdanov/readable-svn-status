@@ -11,7 +11,6 @@ import Data.List
 import qualified Data.Map as M
 import Text.Parsec (ParseError)
 
-
 import Parser
 import Types
 
@@ -29,7 +28,7 @@ data FileGroup
 
 
 newtype ChangeList = ChangeList (M.Map FileGroup [SvnFile])
-    deriving (Eq, Show)
+  deriving (Eq, Show)
 
 
 matchesAll :: [a -> Bool] -> a -> Bool
@@ -85,18 +84,19 @@ setCurrentChangeList :: String -> PState -> PState
 setCurrentChangeList name pstate = pstate { currentChangeListName = name }
 
 addFileToCurrentChangeList :: SvnFile -> PState -> PState
-addFileToCurrentChangeList f pstate =
-  let
-    clName = currentChangeListName pstate
-  in pstate {
-    changeLists = M.alter (fmap (++ [f]) . (<|> (Just []))) clName $ changeLists pstate
-  }
+addFileToCurrentChangeList file =
+  let modifyCurrentChangeList :: (Maybe [SvnFile] -> Maybe [SvnFile]) -> PState -> PState
+      modifyCurrentChangeList f state =
+        let name = currentChangeListName state
+        in state {changeLists = M.alter f name $ changeLists state}
+  in modifyCurrentChangeList (fmap (++ [file]) . (<|> Just []))
 
 buildModel :: [SvnStatusLine] -> ChangesModel
 buildModel svnStatusLines = M.map fromList $ changeLists $ foldl parseOneLine emptyState svnStatusLines
   where
     parseOneLine :: PState -> SvnStatusLine -> PState
-    parseOneLine currentState svnStatusLine = let
+    parseOneLine currentState svnStatusLine =
+      let
         stateAction = case svnStatusLine of
           EmptyLine -> id
           ChangelistSeparator changeListName -> setCurrentChangeList changeListName
