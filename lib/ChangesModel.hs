@@ -105,4 +105,4 @@ buildModel svnStatusLines = M.map fromList $ changeLists $ foldl parseOneLine em
         stateAction currentState
 
 parseModel :: String -> Either ParseError ChangesModel
-parseModel input = buildModel <$> mParseSvnStatusOutput input
+parseModel input = buildModel <$> parseSvnOutput input

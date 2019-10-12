@@ -1,15 +1,15 @@
 module Parser
   ( SvnStatusLine (..)
-  , line
-  , changeListSep
-  , aFile
-  , emptySvnLine
-  , modificationFlag
-  , mParseSvnStatusOutput
+  , svnStatusLineParser
+  , changeListHeaderParser
+  , svnFileParser
+  , emptyLineParser
+  , svnFileFlagParser
+  , parseSvnOutput
   ) where
 
 import Data.Proxy
-import Text.ParserCombinators.Parsec as P
+import Text.ParserCombinators.Parsec
 import Text.Parsec.Char
 
 import Types
@@ -17,37 +17,35 @@ import Types
 data SvnStatusLine = File SvnFile | ChangelistSeparator String | EmptyLine
     deriving (Show, Eq)
 
-svnStatusOutput :: GenParser Char st [SvnStatusLine]
-svnStatusOutput = P.many line
+svnStatusOutputParser :: GenParser Char st [SvnStatusLine]
+svnStatusOutputParser = many svnStatusLineParser
 
-line :: GenParser Char st SvnStatusLine
-line = choice [emptySvnLine, changeListSep, aFile]
+svnStatusLineParser :: GenParser Char st SvnStatusLine
+svnStatusLineParser = choice [emptyLineParser, changeListHeaderParser, svnFileParser]
 
-emptySvnLine :: GenParser Char st SvnStatusLine
-emptySvnLine = endOfLine >> return EmptyLine
+emptyLineParser :: GenParser Char st SvnStatusLine
+emptyLineParser = endOfLine >> return EmptyLine
 
-changeListSep :: GenParser Char st SvnStatusLine
-changeListSep = do
+changeListHeaderParser :: GenParser Char st SvnStatusLine
+changeListHeaderParser = do
   name <- string "--- Changelist '" >> manyTill anyChar (try (string "':" >> endOfLine))
   return (ChangelistSeparator name)
 
-aFile :: GenParser Char st SvnStatusLine
-aFile = fmap File $ pure SvnFile
-  <*> modificationFlag
-  <*> modificationFlag
-  <*> modificationFlag
-  <*> modificationFlag
-  <*> modificationFlag
-  <*> modificationFlag
-  <*> modificationFlag
+svnFileParser :: GenParser Char st SvnStatusLine
+svnFileParser = fmap File $ pure SvnFile
+  <*> svnFileFlagParser
+  <*> svnFileFlagParser
+  <*> svnFileFlagParser
+  <*> svnFileFlagParser
+  <*> svnFileFlagParser
+  <*> svnFileFlagParser
+  <*> svnFileFlagParser
   <*> (char ' ' *> manyTill anyChar endOfLine)
 
-
-mParseSvnStatusOutput :: String -> Either ParseError [SvnStatusLine]
-mParseSvnStatusOutput = parse svnStatusOutput "(stdin)"
-
-modificationFlag :: forall st f. SvnFlag f => GenParser Char st f
-modificationFlag = do
+svnFileFlagParser :: forall st f. SvnFlag f => GenParser Char st f
+svnFileFlagParser = do
   flag <- oneOf (possibleValues (Proxy :: Proxy f))
   return $ parseFlag flag
 
+parseSvnOutput :: String -> Either ParseError [SvnStatusLine]
+parseSvnOutput = parse svnStatusOutputParser "(stdin)"

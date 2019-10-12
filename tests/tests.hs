@@ -5,7 +5,7 @@ import Parser
 import Types
 import Text.Parsec
 
-parseLine = parse line ""
+parseLine = parse svnStatusLineParser ""
 
 main = defaultMain $ hUnitTestToTests $ TestList
   [ TestCase $ assertEqual "parse changelist without endline"
@@ -19,8 +19,8 @@ main = defaultMain $ hUnitTestToTests $ TestList
         (parseLine "M       path/to/file\n")
   , TestCase $ assertEqual "aFile"
         (Right $ File $ (defaultFile "path/to/file") { modificationStatus = MsModified })
-        (parse aFile "-" "M       path/to/file\n")
+        (parse svnFileParser "-" "M       path/to/file\n")
   , TestCase $ assertEqual "just one flag"
         (Right PsModified)
-        (parse modificationFlag "-" "M")
+        (parse svnFileFlagParser "-" "M")
   ]
