@@ -1,7 +1,7 @@
 import System.Console.ANSI
 import System.IO
 
-import Parser
+import ChangesModel
 import StatusPrinter
 
 

@@ -7,7 +7,7 @@ import qualified Data.Map as M
 import System.Console.ANSI
 import Text.Printf
 
-import Parser
+import ChangesModel
 import Types
 
 
