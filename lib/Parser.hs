@@ -8,16 +8,11 @@ module Parser
   , mParseSvnStatusOutput
   ) where
 
-import Control.Applicative as A
-import Control.Monad
-import Data.Function
-import Data.Either
 import Data.Proxy
-import Prelude
-import Types
-
 import Text.ParserCombinators.Parsec as P
 import Text.Parsec.Char
+
+import Types
 
 data SvnStatusLine = File SvnFile | ChangelistSeparator String | EmptyLine
     deriving (Show, Eq)

@@ -5,11 +5,12 @@ module ChangesModel
   , parseModel
   ) where
 
-import Control.Applicative as A
-import Data.List as L
-import Data.Map as M
-import Text.ParserCombinators.Parsec
+import Control.Applicative
 import Data.Bifunctor
+import Data.List
+import qualified Data.Map as M
+import Text.Parsec (ParseError)
+
 
 import Parser
 import Types
@@ -40,7 +41,7 @@ fromList files =
     fillUnrecognized files $ fillRecognized files
   where
     fillRecognized :: [SvnFile] -> ChangeList
-    fillRecognized fs = ChangeList $ M.fromList $ L.map (second $ flip L.filter fs)
+    fillRecognized fs = ChangeList $ M.fromList $ map (second $ flip filter fs)
       [ (Modified, hasFlag MsModified)
       , (Added, hasFlag MsAdded)
       , (NotTracked, hasFlag MsUntracked)
@@ -59,10 +60,10 @@ fromList files =
       ]
 
     fillUnrecognized :: [SvnFile] -> ChangeList -> ChangeList
-    fillUnrecognized fs (ChangeList cl) = ChangeList $ M.insert NotRecognized (uniqFiles L.\\ recognizedFiles) cl
+    fillUnrecognized fs (ChangeList cl) = ChangeList $ M.insert NotRecognized (uniqFiles \\ recognizedFiles) cl
       where
-        uniqFiles = L.nub fs
-        recognizedFiles = L.nub $ M.foldl (++) [] cl
+        uniqFiles = nub fs
+        recognizedFiles = nub $ M.foldl (++) [] cl
 
 
 
@@ -88,11 +89,11 @@ addFileToCurrentChangeList f pstate =
   let
     clName = currentChangeListName pstate
   in pstate {
-    changeLists = M.alter (fmap (++ [f]) . (A.<|> (Just []))) clName $ changeLists pstate
+    changeLists = M.alter (fmap (++ [f]) . (<|> (Just []))) clName $ changeLists pstate
   }
 
 buildModel :: [SvnStatusLine] -> ChangesModel
-buildModel svnStatusLines = M.map ChangesModel.fromList $ changeLists $ L.foldl parseOneLine emptyState svnStatusLines
+buildModel svnStatusLines = M.map fromList $ changeLists $ foldl parseOneLine emptyState svnStatusLines
   where
     parseOneLine :: PState -> SvnStatusLine -> PState
     parseOneLine currentState svnStatusLine = let

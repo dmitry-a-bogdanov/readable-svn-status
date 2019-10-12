@@ -15,7 +15,7 @@ library
                        StatusPrinter,
                        Types,
                        ChangesModel
-  build-depends:       base >=4.11, containers, ansi-terminal, parsec
+  build-depends:       base >=4.11, containers, ansi-terminal >= 0.9, parsec
   default-language:    Haskell2010
   ghc-options:         -Wall
   extensions:          TypeSynonymInstances, FlexibleInstances, ScopedTypeVariables
