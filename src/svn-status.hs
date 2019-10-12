@@ -1,4 +1,3 @@
-import Data.Functor
 import System.Console.ANSI
 import System.IO
 
@@ -9,5 +8,8 @@ import StatusPrinter
 main :: IO ()
 main = do
     colored <- hSupportsANSIColor stdout
-    getContents <&> parseFileLists <&> (showChanges colored) >>= putStr
+    content <- getContents
+    case parseModel content of
+      Right output -> putStr $ showChanges colored output
+      Left e -> print e
     return ()
