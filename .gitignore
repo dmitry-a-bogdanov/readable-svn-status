@@ -2,3 +2,8 @@
 *.o
 svn-status
 dist/
+.stack-work/
+stack.yaml.lock
+*.iml
+stale_outputs_checked
+

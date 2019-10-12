@@ -8,7 +8,9 @@ module Parser
   , FileGroup (..)
   ) where
 
+import Control.Applicative
 import Data.Function
+import Data.Functor
 import Data.Maybe
 import Data.Bifunctor
 import qualified Data.List as L
@@ -30,9 +32,9 @@ skipChar :: Int -> ParsingState c -> ParsingState c
 skipChar n (ParsingState str ctor) = ParsingState (drop n str) ctor
 
 
-
 parseSvnFile :: String -> SvnFile
-parseSvnFile str = (parseOneFlag (ParsingState str SvnFile))
+parseSvnFile str = (ParsingState str SvnFile)
+    & parseOneFlag
     & parseOneFlag
     & parseOneFlag
     & parseOneFlag
@@ -49,6 +51,7 @@ data FileGroup
   | Added
   | Deleted
   | NotRecognized
+  | Conflicted
   | NotTracked
   | NotTouched
   deriving (Bounded, Enum, Eq, Ord, Show)
@@ -56,6 +59,10 @@ data FileGroup
 
 newtype ChangeList = ChangeList (M.Map FileGroup [SvnFile])
     deriving (Eq, Show)
+
+
+matchesAll :: [a -> Bool] -> (a -> Bool)
+matchesAll preds = \x -> and $ map ($ x) preds
 
 
 fromList :: [SvnFile] -> ChangeList
@@ -67,7 +74,7 @@ fromList files =
       [ (Modified, hasFlag MsModified)
       , (Added, hasFlag MsAdded)
       , (NotTracked, hasFlag MsUntracked)
-      , (NotTouched, (\x -> and $ map ($ x)
+      , (NotTouched, matchesAll
           [ hasFlag MsNoModification
           , hasFlag PsNoModification
           , hasFlag NotLocked
@@ -75,10 +82,10 @@ fromList files =
           , hasFlag NotSwitched
           , hasFlag LiNotLocked
           , hasFlag NoConflict
-          ]
-        ))
+          ])
       , (ModifiedProperties, hasFlag PsModified)
       , (Deleted, hasFlag MsDeleted)
+      , (Conflicted, hasFlag MsConflict)
       ]
 
     fillUnrecognized :: [SvnFile] -> ChangeList -> ChangeList
@@ -114,20 +121,29 @@ data PState = PState
   , changeLists :: M.Map String [SvnFile]
   }
 
+emptyState :: PState
+emptyState = PState "" M.empty
 
-withFileInCl :: String -> SvnFile -> (M.Map String [SvnFile]) -> M.Map String [SvnFile]
-withFileInCl clName file = flip M.alter clName $ Just . maybe [file] (++ [file])
+setCurrentChangeList :: String -> PState -> PState
+setCurrentChangeList name pstate = pstate { currentChangeListName = name }
 
+addFileToCurrentChangeList :: SvnFile -> PState -> PState
+addFileToCurrentChangeList f pstate =
+  let
+    clName = currentChangeListName pstate
+  in pstate {
+    changeLists = M.alter (fmap (++ [f]) . (<|> (Just []))) clName $ changeLists pstate
+  }
 
 parseFileLists :: String -> ChangesModel
-parseFileLists string = M.map fromList $ changeLists $ foldl parseOneLine (PState "" M.empty) $ lines string
+parseFileLists string = M.map fromList $ changeLists $ (foldl parseOneLine emptyState) $ parseLine <$> lines string
   where
-    parseOneLine :: PState -> String -> PState
-    parseOneLine currentState line = case parseLine line of
-      EmptyLine -> currentState
-      (ChangelistSeparator changeListName) -> currentState { currentChangeListName = changeListName }
-      (File file) -> let
-          changeListName = currentChangeListName currentState
-        in
-          currentState { changeLists = withFileInCl changeListName file $ changeLists currentState }
+    parseOneLine :: PState -> SvnStatusLine -> PState
+    parseOneLine currentState line = let
+        stateAction = case line of
+          EmptyLine -> id
+          ChangelistSeparator changeListName -> setCurrentChangeList changeListName
+          File file -> addFileToCurrentChangeList file
+      in
+        stateAction currentState
 

@@ -15,8 +15,7 @@ class Printable a where
   toPrintableString :: Bool -> a -> String
 
 
-data TextElem = Text String
-  | Style SGR
+data TextElem = Text String | Style SGR
 
 
 instance Printable TextElem where
@@ -29,7 +28,7 @@ type StatusLine = [TextElem]
 
 
 instance Printable [TextElem] where
-  toPrintableString colored textElems = foldMap (toPrintableString colored) textElems
+  toPrintableString colored = foldMap (toPrintableString colored)
 
 
 instance Printable [[TextElem]] where
@@ -37,7 +36,7 @@ instance Printable [[TextElem]] where
 
 
 tabbed :: Int -> StatusLine -> StatusLine
-tabbed n line = [Text $ replicate n ' '] ++ line
+tabbed n line = (Text $ replicate n ' '):line
 
 
 withStyle :: SGR -> StatusLine -> StatusLine
@@ -55,7 +54,7 @@ showFilesGroup grp files = let
     headerLine = stringToLine . (++ ":") $ headerText
     styledFiles = map (withStyle filesStyle . stringToLine . path) files
   in
-    [headerLine] ++ map (tabbed 2) styledFiles
+    headerLine:map (tabbed 2) styledFiles
   where
     fgShowProperties :: FileGroup -> (String, SGR)
     fgShowProperties fg = case fg of
@@ -67,6 +66,7 @@ showFilesGroup grp files = let
       NotTouched         -> ("Related to changelist but not modified", dullColor Black)
       ModifiedProperties -> ("Files with modified properties", dullColor Yellow)
       Deleted            -> ("Deleted files", dullColor Red)
+      Conflicted         -> ("Files with SVN conflict", dullColor Red)
       where
         dullColor :: Color -> SGR
         dullColor = SetColor Foreground Dull
@@ -78,7 +78,7 @@ showChanges colored m = toPrintableString colored $ M.foldMapWithKey showChangeL
     showChangeList :: String -> ChangeList -> [StatusLine]
     showChangeList name (ChangeList cl) = let
         headerLines = map stringToLine $ case name of
-          "" -> [ "Files to related to any changeslist:"
+          "" -> [ "Files not related to any changeslist:"
                 ]
           n -> [ printf "Changelist '%s':" n
                , printf "  (use \"svn changelist '%s' <file>...\" to add files to this changelist)" n
@@ -89,11 +89,11 @@ showChanges colored m = toPrintableString colored $ M.foldMapWithKey showChangeL
         content = M.foldMapWithKey showFilesGroup cl
         updateFirst :: (a -> a) -> [a] -> [a]
         updateFirst _ [] = []
-        updateFirst f (x:xs) = (f x):xs
+        updateFirst f (x:xs) = f x:xs
       in case content of
         [] -> []
         someLines -> updateFirst (withConsoleIntensity BoldIntensity)
-          headerLines ++ (map (tabbed 2 ) someLines) ++ [stringToLine ""]
+          headerLines ++ map (tabbed 2 ) someLines ++ [stringToLine ""]
           where
             withConsoleIntensity :: ConsoleIntensity -> StatusLine -> StatusLine
             withConsoleIntensity consoleIntensity = withStyle $ SetConsoleIntensity consoleIntensity
