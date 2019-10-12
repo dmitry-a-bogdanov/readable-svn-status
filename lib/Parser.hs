@@ -2,21 +2,22 @@ module Parser
   ( ChangesModel
   , SvnStatusLine (..)
   , ChangeList (..)
-  , defaultFile
   , FileGroup (..)
   , line
   , changeListSep
   , aFile
   , emptySvnLine
   , parseModel
+  , modificationFlag
   ) where
 
 import Control.Applicative as A
+import Control.Monad
 import Data.Function
-import Data.Functor
 import Data.Maybe
 import Data.Bifunctor
 import Data.Either
+import Data.Proxy
 import qualified Data.List as L
 import qualified Data.Map as M
 import Prelude
@@ -40,40 +41,24 @@ changeListSep = do
   return (ChangelistSeparator name)
 
 aFile :: GenParser Char st SvnStatusLine
-aFile = do
-  flags <- count 7 anyChar <* char ' '
-  fpath <- manyTill anyChar (try endOfLine)
-  return $ File . parseSvnFile $ flags ++ " " ++ fpath
+aFile = fmap File $ pure SvnFile
+  <*> modificationFlag
+  <*> modificationFlag
+  <*> modificationFlag
+  <*> modificationFlag
+  <*> modificationFlag
+  <*> modificationFlag
+  <*> modificationFlag
+  <*> (char ' ' *> manyTill anyChar endOfLine)
 
 
 mParseSvnStatusOutput :: String -> Either ParseError [SvnStatusLine]
 mParseSvnStatusOutput = parse svnStatusOutput "(stdin)"
 
-
-data ParsingState c = ParsingState String c
-
-parseOneFlag :: SvnFlag t => ParsingState (t -> c) -> ParsingState c
-parseOneFlag (ParsingState (c:chrs) ctor) = ParsingState chrs (ctor $ parseFlag c)
-parseOneFlag _ = error "Malformed input"
-
-parsePath :: ParsingState (String -> t) -> t
-parsePath (ParsingState str ctor) = ctor str
-
-skipChar :: Int -> ParsingState c -> ParsingState c
-skipChar n (ParsingState str ctor) = ParsingState (drop n str) ctor
-
-
-parseSvnFile :: String -> SvnFile
-parseSvnFile str = ParsingState str SvnFile
-    & parseOneFlag
-    & parseOneFlag
-    & parseOneFlag
-    & parseOneFlag
-    & parseOneFlag
-    & parseOneFlag
-    & parseOneFlag
-    & skipChar 1
-    & parsePath
+modificationFlag :: forall st f. SvnFlag f => GenParser Char st f
+modificationFlag = do
+  flag <- oneOf (possibleValues (Proxy :: Proxy f))
+  return $ parseFlag flag
 
 
 data FileGroup

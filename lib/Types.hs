@@ -4,6 +4,7 @@ module Types
   , parseFlag
   , getFromFile
   , defaultFile
+  , possibleValues
   , ModificationStatus (..)
   , PropStatus (..)
   , LockStatus (..)
@@ -13,11 +14,20 @@ module Types
   , ConflictStatus(..)
   ) where
 
+import Data.Proxy
+
 class (Eq a) => SvnFlag a where
-    parseFlag :: Char -> a
+  parseFlag :: Char -> a
+  parseFlag c = case lookup c (charToFlagMapping (Proxy :: Proxy a)) of
+    Just f -> f
+    Nothing -> error "unknown flag value"
 
-    getFromFile :: SvnFile -> a
+  getFromFile :: SvnFile -> a
 
+  charToFlagMapping :: Proxy a -> [(Char, a)]
+
+  possibleValues :: Proxy a -> [Char]
+  possibleValues _ = map fst (charToFlagMapping (Proxy :: Proxy a))
 
 data ModificationStatus = MsNoModification
     | MsAdded
@@ -33,20 +43,20 @@ data ModificationStatus = MsNoModification
     deriving (Eq, Show)
 
 instance SvnFlag ModificationStatus where
-    parseFlag ' ' = MsNoModification
-    parseFlag 'A' = MsAdded
-    parseFlag 'D' = MsDeleted
-    parseFlag 'M' = MsModified
-    parseFlag 'R' = MsReplaced
-    parseFlag 'C' = MsConflict
-    parseFlag 'X' = MsExternal
-    parseFlag 'I' = MsIgnored
-    parseFlag '?' = MsUntracked
-    parseFlag '!' = MsMissing
-    parseFlag '~' = MsKindChanged
-    parseFlag _ = error "Unknown modification status"
+  getFromFile = modificationStatus
 
-    getFromFile = modificationStatus
+  charToFlagMapping _ =
+    [ (' ', MsNoModification)
+    , ('A', MsAdded)
+    , ('D', MsDeleted)
+    , ('M', MsModified)
+    , ('R', MsReplaced)
+    , ('C', MsConflict)
+    , ('I', MsIgnored)
+    , ('?', MsUntracked)
+    , ('!', MsMissing)
+    , ('~', MsKindChanged)
+    ]
 
 
 data PropStatus = PsNoModification
@@ -55,12 +65,13 @@ data PropStatus = PsNoModification
     deriving (Eq, Show)
 
 instance SvnFlag PropStatus where
-    parseFlag ' ' = PsNoModification
-    parseFlag 'M' = PsModified
-    parseFlag 'C' = PsConflict
-    parseFlag _ = error "Unknown properies status"
+  charToFlagMapping _ =
+    [ (' ', PsNoModification)
+    , ('M', PsModified)
+    , ('C', PsConflict)
+    ]
 
-    getFromFile = propStatus
+  getFromFile = propStatus
 
 
 data LockStatus = Locked | NotLocked
@@ -68,9 +79,10 @@ data LockStatus = Locked | NotLocked
 
 
 instance SvnFlag LockStatus where
-  parseFlag ' ' = NotLocked
-  parseFlag 'L' = Locked
-  parseFlag _ = error "Unknown lockStatus status"
+  charToFlagMapping _ =
+    [ (' ', NotLocked)
+    , ('L', Locked)
+    ]
 
   getFromFile = lockStatus
 
@@ -79,9 +91,10 @@ data HistoryStatus = HasHistory | NoHistory
 
 
 instance SvnFlag HistoryStatus where
-  parseFlag '+' = HasHistory
-  parseFlag ' ' = NoHistory
-  parseFlag _ = error "Unknown historyStatus flag"
+  charToFlagMapping _ =
+    [ ('+', HasHistory)
+    , (' ', NoHistory)
+    ]
 
   getFromFile = historyStatus
 
@@ -91,9 +104,10 @@ data SwitchStatus = Switched | NotSwitched
 
 
 instance SvnFlag SwitchStatus where
-  parseFlag ' ' = NotSwitched
-  parseFlag 'S' = Switched
-  parseFlag _ = error "Unknown switched status"
+  charToFlagMapping _ =
+    [ (' ', NotSwitched)
+    , ('S', Switched)
+    ]
 
   getFromFile = switchStatus
 
@@ -106,13 +120,13 @@ data LockInfo = LiNotLocked
 
 
 instance SvnFlag LockInfo where
-  parseFlag ' ' = LiNotLocked
-  parseFlag 'K' = LiLocalLock
-  parseFlag 'O' = LiOtherLocked
-  parseFlag 'T' = LiStolen
-  parseFlag 'B' = LiBroken
-  parseFlag _ = error "Unknown lock info"
-
+  charToFlagMapping _ =
+    [ (' ', LiNotLocked)
+    , ('K', LiLocalLock)
+    , ('O', LiOtherLocked)
+    , ('T', LiStolen)
+    , ('B', LiBroken)
+    ]
   getFromFile = lockInfo
 
 
@@ -121,9 +135,10 @@ data ConflictStatus = NoConflict | Conflict
 
 
 instance SvnFlag ConflictStatus where
-  parseFlag ' ' = NoConflict
-  parseFlag 'C' = Conflict
-  parseFlag _ = error "Unknown conflict status"
+  charToFlagMapping _ =
+    [ (' ', NoConflict)
+    , ('C', Conflict)
+    ]
 
   getFromFile = conflictStatus
 

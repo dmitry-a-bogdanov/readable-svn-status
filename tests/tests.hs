@@ -17,4 +17,10 @@ main = defaultMain $ hUnitTestToTests $ TestList
   , TestCase $ assertEqual "parse file"
         (Right $ File $ (defaultFile "path/to/file") { modificationStatus = MsModified })
         (parseLine "M       path/to/file\n")
+  , TestCase $ assertEqual "aFile"
+        (Right $ File $ (defaultFile "path/to/file") { modificationStatus = MsModified })
+        (parse aFile "-" "M       path/to/file\n")
+  , TestCase $ assertEqual "just one flag"
+        (Right PsModified)
+        (parse modificationFlag "-" "M")
   ]

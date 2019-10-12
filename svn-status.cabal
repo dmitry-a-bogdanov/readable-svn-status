@@ -17,7 +17,7 @@ library
   build-depends:       base >=4.11, containers, ansi-terminal, parsec
   default-language:    Haskell2010
   ghc-options:         -Wall
-  extensions:          TypeSynonymInstances, FlexibleInstances
+  extensions:          TypeSynonymInstances, FlexibleInstances, ScopedTypeVariables
 
 executable svn-status
   main-is:             svn-status.hs
