@@ -83,26 +83,26 @@ emptyState = PState "" M.empty
 setCurrentChangeList :: String -> PState -> PState
 setCurrentChangeList name pstate = pstate { currentChangeListName = name }
 
+modifyCurrentChangeList :: (Maybe [SvnFile] -> Maybe [SvnFile]) -> PState -> PState
+modifyCurrentChangeList f state =
+  let name = currentChangeListName state
+  in state {changeLists = M.alter f name $ changeLists state}
+
 addFileToCurrentChangeList :: SvnFile -> PState -> PState
-addFileToCurrentChangeList file =
-  let modifyCurrentChangeList :: (Maybe [SvnFile] -> Maybe [SvnFile]) -> PState -> PState
-      modifyCurrentChangeList f state =
-        let name = currentChangeListName state
-        in state {changeLists = M.alter f name $ changeLists state}
-  in modifyCurrentChangeList (fmap (++ [file]) . (<|> Just []))
+addFileToCurrentChangeList file = modifyCurrentChangeList $ fmap (++ [file]) . (<|> Just [])
+
+handleOneLine :: PState -> SvnStatusLine -> PState
+handleOneLine currentState svnStatusLine =
+  let
+    stateAction = case svnStatusLine of
+      EmptyLine -> id
+      ChangelistSeparator changeListName -> setCurrentChangeList changeListName
+      File file -> addFileToCurrentChangeList file
+  in
+    stateAction currentState
 
 buildModel :: [SvnStatusLine] -> ChangesModel
-buildModel svnStatusLines = M.map fromList $ changeLists $ foldl parseOneLine emptyState svnStatusLines
-  where
-    parseOneLine :: PState -> SvnStatusLine -> PState
-    parseOneLine currentState svnStatusLine =
-      let
-        stateAction = case svnStatusLine of
-          EmptyLine -> id
-          ChangelistSeparator changeListName -> setCurrentChangeList changeListName
-          File file -> addFileToCurrentChangeList file
-      in
-        stateAction currentState
+buildModel svnStatusLines = M.map fromList $ changeLists $ foldl handleOneLine emptyState svnStatusLines
 
 parseModel :: String -> Either ParseError ChangesModel
 parseModel input = buildModel <$> parseSvnOutput input
