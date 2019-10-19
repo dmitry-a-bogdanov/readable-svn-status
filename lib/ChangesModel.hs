@@ -7,7 +7,9 @@ module ChangesModel
 
 import Control.Applicative
 import Data.Bifunctor
+import Data.Foldable
 import Data.List
+import Control.Monad.Trans.State
 import qualified Data.Map as M
 import Text.Parsec (ParseError)
 
@@ -69,40 +71,21 @@ fromList files =
 hasFlag :: SvnFlag a => a -> SvnFile -> Bool
 hasFlag flag = (flag ==) . getFromFile
 
+type RawChangeLists = M.Map String [SvnFile]
+
+addLine :: RawChangeLists -> SvnStatusLine -> State String RawChangeLists
+addLine cls EmptyLine = return cls
+addLine cls (ChangelistSeparator clName) = do
+  put clName
+  return cls
+addLine cls (File f) = do
+  clName <- get
+  return $ M.alter (fmap (++ [f]) . (<|> Just [])) clName cls
+
 type ChangesModel = M.Map String ChangeList
 
-
-data PState = PState
-  { currentChangeListName :: String
-  , changeLists :: M.Map String [SvnFile]
-  }
-
-emptyState :: PState
-emptyState = PState "" M.empty
-
-setCurrentChangeList :: String -> PState -> PState
-setCurrentChangeList name pstate = pstate { currentChangeListName = name }
-
-modifyCurrentChangeList :: (Maybe [SvnFile] -> Maybe [SvnFile]) -> PState -> PState
-modifyCurrentChangeList f state =
-  let name = currentChangeListName state
-  in state {changeLists = M.alter f name $ changeLists state}
-
-addFileToCurrentChangeList :: SvnFile -> PState -> PState
-addFileToCurrentChangeList file = modifyCurrentChangeList $ fmap (++ [file]) . (<|> Just [])
-
-handleOneLine :: PState -> SvnStatusLine -> PState
-handleOneLine currentState svnStatusLine =
-  let
-    stateAction = case svnStatusLine of
-      EmptyLine -> id
-      ChangelistSeparator changeListName -> setCurrentChangeList changeListName
-      File file -> addFileToCurrentChangeList file
-  in
-    stateAction currentState
-
 buildModel :: [SvnStatusLine] -> ChangesModel
-buildModel svnStatusLines = M.map fromList $ changeLists $ foldl handleOneLine emptyState svnStatusLines
+buildModel svnStatusLines = M.map fromList $ evalState (foldlM addLine M.empty svnStatusLines) ""
 
 parseModel :: String -> Either ParseError ChangesModel
 parseModel input = buildModel <$> parseSvnOutput input
